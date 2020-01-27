@@ -1,31 +1,79 @@
-int stepPin = 9;
-int dirPin = 8;
-int waitTime = 2500; //in micro seconds
-int stepPerRev = 1000; //steps per rev, set on the motor controller
+class Motor {
+  private:
+    int _dirPin;
+    int _stepPin;
+    int _waitTime;
+    long _lastPulse;
+    double _distancePerPulse;
+    double _pulsesRemaining;
 
-void setup() {
-  //set both pins to outputs
-  pinMode(dirPin, OUTPUT);
-  pinMode(stepPin, OUTPUT);
+  public:
+    Motor();
+    void init(int dirPin, int stepPin, double distancePerPulse);
+    void on();
+    void off();
+    void setWaitTime(int waitTime);
+    bool checkPulse();
+    double travel(double deltaMM, double feedrate);
+    double getPulsesRemaining();
+};
 
-  //the motor starts as off
-  digitalWrite(dirPin, LOW);
-  digitalWrite(stepPin, LOW);
-
-   //open serial connection to the computer with a baud rate of 9600
-  Serial.begin(9600);
+Motor::Motor(){
+  this->_dirPin = 0;
+  this->_stepPin = 0;
+  this->_waitTime = 1000;
 }
 
-void loop() {
-  //writing dirPin high, to control direction of motor
-  digitalWrite(dirPin, HIGH);
+void Motor::init(int dirPin, int stepPin, double distancePerPulse) {
+  _dirPin = dirPin;
+  _stepPin = stepPin;
+  _distancePerPulse = distancePerPulse;
+  pinMode(dirPin, OUTPUT);
+  pinMode(stepPin, OUTPUT);
+  digitalWrite(_dirPin, LOW);
+  digitalWrite(_stepPin, LOW);
+}
 
-  if(Serial.available() > 0){ //Check if the serial port successfully opened
-    double rps = Serial.readString().toFloat(); //Read a value (revs per second)
-    waitTime = 1000000/(stepPerRev*rps); //calculate the microseconds between pulses
-    //Serial.println(waitTime);
+bool Motor::checkPulse() {
+  if (_pulsesRemaining > 0) {
+    if (micros() >= _lastPulse + _waitTime) {
+      this->_lastPulse = micros();
+      this->_pulsesRemaining = _pulsesRemaining - 1;
+      return true;
+    } else {
+      return false;
+    }
+  } else {
+    return false;
   }
-  digitalWrite(stepPin, HIGH); //writing stepPin high, moving the motor 1/1000 of a rev
-  delayMicroseconds(waitTime); //wait the calculated delay
-  digitalWrite(stepPin, LOW); //write stepPin low, stopping the motor
+}
+
+double Motor::travel(double deltaMM, double feedrate) {
+  if (deltaMM > 0) {
+    digitalWrite(_dirPin, HIGH);
+  } else {
+    digitalWrite(_dirPin, LOW);
+  }
+  this->_pulsesRemaining = deltaMM / _distancePerPulse;
+  double pulsesPerSecond = feedrate / _distancePerPulse;
+  double microseconds = (_pulsesRemaining / pulsesPerSecond) * 1000000;
+  return (microseconds / _pulsesRemaining);
+}
+
+void Motor::on() {
+  digitalWrite(_dirPin, HIGH);
+  digitalWrite(_stepPin, HIGH);
+}
+
+void Motor::off() {
+  digitalWrite(_dirPin, LOW);
+  digitalWrite(_stepPin, LOW);
+}
+
+void Motor::setWaitTime(int waitTime) {
+  this->_waitTime = waitTime;
+}
+
+double Motor::getPulsesRemaining() {
+  return _pulsesRemaining;
 }
